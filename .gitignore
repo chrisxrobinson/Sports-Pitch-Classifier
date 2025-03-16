@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pth
+.venv/
+uv.lock
+node_modules/
+build/
