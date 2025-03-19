@@ -3,8 +3,35 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms, models
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms, models
+from sklearn.model_selection import train_test_split
+
+from dataset import load_resisc45_dataset
+
+# Custom dataset class to convert HF dataset to PyTorch format
+class RESISC45Dataset(Dataset):
+    def __init__(self, dataset, indices=None, transform=None):
+        self.dataset = dataset
+        self.indices = indices if indices is not None else range(len(dataset))
+        self.transform = transform
+        self.classes = sorted(set(self.dataset[i]['label'] for i in self.indices))
+        self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
+        
+    def __len__(self):
+        return len(self.indices)
+    
+    def __getitem__(self, idx):
+        data_idx = self.indices[idx]
+        img = self.dataset[data_idx]['image']
+        label = self.dataset[data_idx]['label']
+        
+        if self.transform:
+            img = self.transform(img)
+            
+        # Convert original dataset label to our class index
+        label_idx = self.class_to_idx[label]
+        return img, label_idx
 
 # Data transformations
 train_transforms = transforms.Compose([
@@ -22,13 +49,24 @@ val_transforms = transforms.Compose([
                          [0.229, 0.224, 0.225])
 ])
 
-# Load datasets
-train_dataset = datasets.ImageFolder(root="data/train", transform=train_transforms)
-val_dataset = datasets.ImageFolder(root="data/val", transform=val_transforms)
-
-# Create dataloaders
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=32)
+def prepare_dataloaders(batch_size=32, test_size=0.2, random_state=42):
+    dataset = load_resisc45_dataset()
+    
+    # Split indices for train and validation
+    indices = list(range(len(dataset)))
+    train_indices, val_indices = train_test_split(
+        indices, test_size=test_size, random_state=random_state, stratify=[dataset[i]['label'] for i in indices]
+    )
+    
+    # Create datasets
+    train_dataset = RESISC45Dataset(dataset, train_indices, transform=train_transforms)
+    val_dataset = RESISC45Dataset(dataset, val_indices, transform=val_transforms)
+    
+    # Create dataloaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size)
+    
+    return train_loader, val_loader, train_dataset
 
 def get_model(num_classes):
     # Load pre-trained ResNet18
@@ -45,7 +83,8 @@ def get_model(num_classes):
     return model
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs=10, patience=2):
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    print(f"Using device: {device}")
     model.to(device)
     
     best_model_wts = model.state_dict()
@@ -92,7 +131,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=10, patienc
                 running_corrects += torch.sum(preds == labels.data)
             
             epoch_loss = running_loss / len(dataloader.dataset)
-            epoch_acc = running_corrects.double() / len(dataloader.dataset)
+            epoch_acc = running_corrects.float() / len(dataloader.dataset)
             
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
             
@@ -117,13 +156,13 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=10, patienc
     model.load_state_dict(best_model_wts)
     return model
 
-def save_model(model, save_dir='models'):
+def save_model(model, class_to_idx, save_dir='models'):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     
     torch.save({
         'model_state_dict': model.state_dict(),
-        'class_to_idx': train_dataset.class_to_idx
+        'class_to_idx': class_to_idx
     }, os.path.join(save_dir, 'pitch_classifier.pth'))
     
     print(f"Model saved to {os.path.join(save_dir, 'pitch_classifier.pth')}")
@@ -134,8 +173,12 @@ def main():
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--patience', type=int, default=2, help='Early stopping patience')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     
     args = parser.parse_args()
+    
+    # Create dataloaders
+    train_loader, val_loader, train_dataset = prepare_dataloaders(batch_size=args.batch_size)
     
     # Create model
     num_classes = len(train_dataset.classes)
@@ -145,18 +188,15 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.fc.parameters(), lr=args.lr)
     
-    # Dataloaders
     dataloaders = {
         'train': train_loader,
         'val': val_loader
     }
     
-    # Train model
     model = train_model(model, dataloaders, criterion, optimizer, 
                         num_epochs=args.epochs, patience=args.patience)
     
-    # Save model
-    save_model(model)
+    save_model(model, train_dataset.class_to_idx)
 
 if __name__ == "__main__":
     main()
