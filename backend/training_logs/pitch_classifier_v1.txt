@@ -1,0 +1,54 @@
+(backend) chrisrobinson@Mac ~/Documents/GitHub/Sports-Pitch-Classifier/backend [training] $ uv run python train.py
+Using device: mps
+Epoch 1/10
+----------
+train Loss: 1.4205 Acc: 0.6001
+val Loss: 0.6798 Acc: 0.7966
+
+Epoch 2/10
+----------
+train Loss: 1.0053 Acc: 0.7040
+val Loss: 0.6269 Acc: 0.8169
+
+Epoch 3/10
+----------
+train Loss: 0.8946 Acc: 0.7371
+val Loss: 0.4529 Acc: 0.8595
+
+Epoch 4/10
+----------
+train Loss: 0.8139 Acc: 0.7591
+val Loss: 0.4546 Acc: 0.8608
+
+Epoch 5/10
+----------
+train Loss: 0.7447 Acc: 0.7845
+val Loss: 0.4444 Acc: 0.8669
+
+Epoch 6/10
+----------
+train Loss: 0.5972 Acc: 0.8202
+val Loss: 0.3155 Acc: 0.9053
+
+Epoch 7/10
+----------
+train Loss: 0.5341 Acc: 0.8397
+val Loss: 0.2901 Acc: 0.9108
+
+Epoch 8/10
+----------
+train Loss: 0.5301 Acc: 0.8409
+val Loss: 0.2907 Acc: 0.9093
+
+Epoch 9/10
+----------
+train Loss: 0.5042 Acc: 0.8472
+val Loss: 0.2652 Acc: 0.9196
+
+Epoch 10/10
+----------
+train Loss: 0.4936 Acc: 0.8503
+val Loss: 0.2740 Acc: 0.9153
+
+Best val Acc: 0.9196
+Model saved to models/pitch_classifier_v1.pth
