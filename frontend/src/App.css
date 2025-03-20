@@ -1,0 +1,15 @@
+body {
+  background-color: #f5f5f5;
+  font-family: 'Roboto', sans-serif;
+}
+
+.MuiContainer-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom file upload button */
+input[type="file"] {
+  display: none;
+}
