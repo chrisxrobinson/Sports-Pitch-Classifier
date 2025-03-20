@@ -28,7 +28,7 @@ setup-minio:
 local-dev:
 	docker-compose up -d
 	@echo "Waiting for services to start..."
-	sleep 15  # Increased wait time to ensure services are fully up
+	sleep 10
 	$(MAKE) setup-minio
 	@echo "Local development environment is ready!"
 	@echo "Frontend: http://localhost:3000"
