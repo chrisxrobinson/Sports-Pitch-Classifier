@@ -4,9 +4,14 @@ from torch.utils.data import DataLoader
 from torchvision import models
 from sklearn.metrics import classification_report, confusion_matrix
 import argparse
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from dataset import load_resisc45_dataset
 from train import RESISC45Dataset, val_transforms
+from config import IDX_TO_LABEL
 
 def load_model(model_path, num_classes):
     model = models.resnet18(weights=None)
@@ -56,13 +61,35 @@ def prepare_test_dataset(test_size=0.1, random_state=42):
     
     return test_loader, test_dataset
 
+def plot_confusion_matrix(cm, class_names, output_file):
+    """
+    Plot and save confusion matrix as a figure
+    """
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(cm, annot=False, cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    
+    # Save the figure
+    plt.savefig(output_file.replace('.txt', '_cm.png'))
+    plt.close()
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Sports Pitch Classifier")
-    parser.add_argument("--model_path", type=str, default="models/pitch_classifier.pth",
+    parser.add_argument("--model_path", type=str, default="models/pitch_classifier_v1.pth",
                         help="Path to the saved model")
-    parser.add_argument("--output_file", type=str, default="evaluation_results.txt",
+    
+    # Update default output file path to use the evaluation_results directory
+    evaluation_dir = "evaluation_results"
+    parser.add_argument("--output_file", type=str, 
+                        default=os.path.join(evaluation_dir, "pitch_classifier_v1_evaluation.txt"),
                         help="Path to save evaluation results")
     args = parser.parse_args()
+    
+    # Create evaluation_results directory if it doesn't exist
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
     
     # Set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else 
@@ -76,12 +103,9 @@ def main():
     model, class_to_idx = load_model(args.model_path, len(test_dataset.classes))
     model.to(device)
     
-    # Map indices to class names
-    idx_to_class = {v: k for k, v in class_to_idx.items()}
-    
-    # Convert numeric indices to string class names
-    # This fixes the TypeError in classification_report
-    class_names = [str(idx_to_class[i]) for i in range(len(idx_to_class))]
+    # Use the IDX_TO_LABEL from config instead of generating from class_to_idx
+    # This ensures we have human-readable class names
+    class_names = [IDX_TO_LABEL[i] for i in range(len(IDX_TO_LABEL))]
     
     # Evaluate model
     all_preds, all_labels = evaluate_model(model, test_loader, device)
@@ -95,6 +119,9 @@ def main():
     report = classification_report(all_labels, all_preds, target_names=class_names)
     print(report)
     
+    # Plot and save confusion matrix
+    plot_confusion_matrix(cm, class_names, args.output_file)
+    
     # Save results to file
     with open(args.output_file, 'w') as f:
         f.write("Confusion Matrix:\n")
@@ -103,6 +130,7 @@ def main():
         f.write(report)
     
     print(f"\nResults saved to {args.output_file}")
+    print(f"Confusion matrix plot saved to {args.output_file.replace('.txt', '_cm.png')}")
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ from torchvision import models, transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from config import IDX_TO_LABEL
 
 def load_model(model_path):
     # Create the model architecture
@@ -22,10 +23,11 @@ def load_model(model_path):
     model.load_state_dict(checkpoint['model_state_dict'])
     class_to_idx = checkpoint['class_to_idx']
     
-    # Get class names
-    idx_to_class = {v: k for k, v in class_to_idx.items()}
+    # Create a mapping from model's class indices to human-readable labels
+    # Use IDX_TO_LABEL from config for better readability
+    idx_to_name = {v: IDX_TO_LABEL[v] for v in class_to_idx.values()}
     
-    return model, idx_to_class
+    return model, idx_to_name
 
 def process_image(image_path):
     # Define the same image transformations used in validation
@@ -64,7 +66,7 @@ def process_image(image_path):
 
 def predict(image_path, model_path, top_k=3, display=True):
     # Load the model
-    model, idx_to_class = load_model(model_path)
+    model, idx_to_name = load_model(model_path)
     model.eval()
     
     # Process the image
@@ -83,7 +85,7 @@ def predict(image_path, model_path, top_k=3, display=True):
     top_indices = top_indices.numpy()
     
     # Map indices to class names
-    top_classes = [idx_to_class[idx] for idx in top_indices]
+    top_classes = [idx_to_name[idx] for idx in top_indices]
     
     # Print results
     print(f"\nPredictions for {image_path}:")
