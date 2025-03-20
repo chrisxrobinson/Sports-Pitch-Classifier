@@ -1,0 +1,42 @@
+services:
+  lambda:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "9090:8080"
+    environment:
+      - MODEL_BUCKET=sports-pitch-models
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT_URL=http://minio:9000
+    depends_on:
+      - minio
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:9090/2015-03-31/functions/function/invocations
+      - REACT_APP_AVAILABLE_MODELS=pitch_classifier_v0.pth,pitch_classifier_v1.pth
+      - REACT_APP_MODEL_BUCKET=sports-pitch-models
+    depends_on:
+      - lambda
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data:
