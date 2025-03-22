@@ -9,7 +9,15 @@ from PIL import Image
 import torch
 from torchvision import transforms, models
 
-s3_client = boto3.client('s3')
+# Configure S3 client with endpoint URL
+endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+s3_client = boto3.client(
+    's3',
+    endpoint_url=endpoint_url,
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'test'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'test'),
+    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+)
 
 # Default bucket where models are stored
 DEFAULT_BUCKET = os.environ.get('MODEL_BUCKET', 'sports-pitch-models')
@@ -18,11 +26,17 @@ def download_model_from_s3(bucket, key):
     try:
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             tmp_path = tmp_file.name
-            
+        
         s3_client.download_file(bucket, key, tmp_path)
         return tmp_path
     except Exception as e:
-        raise Exception(f"Failed to download model from S3: {str(e)}")
+        # Try alternative path format if first attempt fails
+        try:
+            alternative_key = key.replace('model/', '')
+            s3_client.download_file(bucket, alternative_key, tmp_path)
+            return tmp_path
+        except Exception as nested_e:
+            raise Exception(f"Failed to download model from S3: {str(e)}, Alternative attempt error: {str(nested_e)}")
 
 def load_model(model_path):
     model = models.resnet18(weights=None)
@@ -34,6 +48,13 @@ def load_model(model_path):
     model.eval()
     return model, checkpoint['class_to_idx']
 
+def get_image_from_s3(bucket, key):
+    try:
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        return response['Body'].read()
+    except Exception as e:
+        raise Exception(f"Failed to download image from S3: {str(e)}")
+
 preprocess = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
@@ -43,15 +64,39 @@ preprocess = transforms.Compose([
 
 def lambda_handler(event, context):
     try:
+        print("Received event:", json.dumps(event))  # Add logging to debug
+        
+        # Check if body exists in the event
+        if "body" not in event:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "Missing request body"})
+            }
+            
         if event.get("isBase64Encoded", False):
             body_data = json.loads(base64.b64decode(event["body"]).decode('utf-8'))
         else:
             body_data = json.loads(event["body"]) if isinstance(event["body"], str) else event["body"]
         
-        image_data = base64.b64decode(body_data.get("image_data"))
+        # Get image data either from direct upload or S3
+        image_data = None
+        if "image_data" in body_data:
+            image_data = base64.b64decode(body_data.get("image_data"))
+        elif "s3_key" in body_data:
+            # Alternative approach: get image from S3
+            image_bucket = body_data.get("image_bucket", DEFAULT_BUCKET)
+            image_data = get_image_from_s3(image_bucket, body_data.get("s3_key"))
+        else:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "Missing image_data or s3_key in request"})
+            }
+        
         model_name = body_data.get("model_key", "pitch_classifier.pth")
         model_bucket = body_data.get("model_bucket", DEFAULT_BUCKET)
         
+        print(f"Processing request with model: {model_name} from bucket: {model_bucket}")
+
         model_path = download_model_from_s3(model_bucket, f"model/{model_name}")
         
         model, class_to_idx = load_model(model_path)

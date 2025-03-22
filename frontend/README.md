@@ -35,16 +35,14 @@ docker build -t sports-pitch-frontend .
 docker run -p 3000:80 sports-pitch-frontend
 ```
 
-## Deployment to AWS S3
+## S3 Upload Flow
 
-This application is designed to be deployed as a static website on AWS S3.
-
-1. Create an S3 bucket with static website hosting enabled
-2. Build the React application
-3. Upload the contents of the `build` directory to the S3 bucket
-4. Configure environment variables using S3 bucket website configuration
-
-See the deployment script in the `scripts` directory for an automated deployment option.
+The frontend application uploads images directly to S3 using AWS SDK v3:
+1. Images are selected by the user
+2. Images are resized in the browser to reduce size
+3. Resized images are uploaded directly to S3 using the AWS SDK
+4. The S3 key is sent to the Lambda function for processing
+5. The Lambda function loads the image from S3 and runs inference
 
 ## Environment Variables
 
@@ -53,3 +51,7 @@ The application can be configured using the following environment variables:
 - `REACT_APP_API_URL`: URL of the Lambda function endpoint
 - `REACT_APP_AVAILABLE_MODELS`: Comma-separated list of available model filenames
 - `REACT_APP_MODEL_BUCKET`: S3 bucket name where models are stored
+- `REACT_APP_AWS_ACCESS_KEY_ID`: AWS access key for S3 operations
+- `REACT_APP_AWS_SECRET_ACCESS_KEY`: AWS secret key for S3 operations
+- `REACT_APP_AWS_ENDPOINT_URL`: AWS endpoint URL (for LocalStack)
+- `REACT_APP_AWS_REGION`: AWS region for S3 operations

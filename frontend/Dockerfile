@@ -1,22 +1,36 @@
-FROM node:18-alpine AS build
+FROM node:18
 
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install
+# Add build args
+ARG REACT_APP_API_URL
+ARG REACT_APP_AVAILABLE_MODELS
+ARG REACT_APP_MODEL_BUCKET
+ARG REACT_APP_AWS_ACCESS_KEY_ID
+ARG REACT_APP_AWS_SECRET_ACCESS_KEY
+ARG REACT_APP_AWS_ENDPOINT_URL
+ARG REACT_APP_AWS_REGION
 
-# Copy the rest of the frontend code
+# Set environment variables for both build time and runtime
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_AVAILABLE_MODELS=$REACT_APP_AVAILABLE_MODELS
+ENV REACT_APP_MODEL_BUCKET=$REACT_APP_MODEL_BUCKET
+ENV REACT_APP_AWS_ACCESS_KEY_ID=$REACT_APP_AWS_ACCESS_KEY_ID
+ENV REACT_APP_AWS_SECRET_ACCESS_KEY=$REACT_APP_AWS_SECRET_ACCESS_KEY
+ENV REACT_APP_AWS_ENDPOINT_URL=$REACT_APP_AWS_ENDPOINT_URL
+ENV REACT_APP_AWS_REGION=$REACT_APP_AWS_REGION
+
+COPY package*.json ./
+RUN npm install
 COPY . .
 
-# Build the React app
+# Build the app with environment variables
 RUN npm run build
 
-# Production stage using nginx
-FROM nginx:alpine
-COPY --from=build /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Install serve to run the application
+RUN npm install -g serve
 
-EXPOSE 80
+EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
+
+CMD ["npm", "start"]

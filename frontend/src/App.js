@@ -3,10 +3,20 @@ import { Container, Typography, Button, Box, FormControl, InputLabel, Select, Me
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import axios from 'axios';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import './App.css';
 
-// Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+const s3Client = new S3Client({
+  region: process.env.REACT_APP_AWS_REGION || 'us-east-1',
+  endpoint: process.env.REACT_APP_AWS_ENDPOINT_URL || 'http://localhost:4566',
+  credentials: {
+    accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || 'test'
+  },
+  forcePathStyle: true // Needed for LocalStack
+});
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -16,11 +26,89 @@ function App() {
   const [predictions, setPredictions] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const fileInputRef = useRef(null);
 
+  const resizeImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const MAX_WIDTH = 500;
+          const MAX_HEIGHT = 500;
+          
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+          
+          // Create canvas and resize image
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          // Use white background for PNG transparency
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Always convert to JPEG for API transmission (smaller file size)
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/jpeg', 0.4); // Lower quality for even smaller file size
+        };
+      };
+    });
+  };
+
+  const uploadToS3 = async (file) => {
+    try {
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 10);
+      const filename = `${timestamp}-${randomString}.jpg`;
+      const s3Key = `images/${filename}`;
+      
+      const command = new PutObjectCommand({
+        Bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models',
+        Key: s3Key,
+        Body: file,
+        ContentType: 'image/jpeg'
+      });
+            
+      await s3Client.send(command);
+
+      setUploadProgress(100);
+      
+      return s3Key;
+    } catch (error) {
+      throw new Error(`Failed to upload image to S3: ${error.message}`);
+    }
+  };
+
   useEffect(() => {
-    // Get available models from environment variable
+    console.log('Environment variables:', {
+      REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+      REACT_APP_AVAILABLE_MODELS: process.env.REACT_APP_AVAILABLE_MODELS,
+      REACT_APP_MODEL_BUCKET: process.env.REACT_APP_MODEL_BUCKET,
+      REACT_APP_AWS_REGION: process.env.REACT_APP_AWS_REGION,
+      REACT_APP_AWS_ENDPOINT_URL: process.env.REACT_APP_AWS_ENDPOINT_URL
+    });
+    
     const modelsString = process.env.REACT_APP_AVAILABLE_MODELS || 'pitch_classifier_v1.pth';
     const models = modelsString.split(',');
     setAvailableModels(models);
@@ -32,22 +120,20 @@ function App() {
     if (file) {
       setSelectedFile(file);
       
-      // Create a preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result);
       };
       reader.readAsDataURL(file);
       
-      // Reset predictions when a new file is selected
       setPredictions(null);
       setError(null);
+      setUploadProgress(0);
     }
   };
 
   const handleModelChange = (event) => {
     setSelectedModel(event.target.value);
-    // Reset predictions when a new model is selected
     setPredictions(null);
     setError(null);
   };
@@ -60,27 +146,29 @@ function App() {
 
     setIsLoading(true);
     setError(null);
+    setUploadProgress(0);
 
     try {
-      // Convert image to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(selectedFile);
+      const resizedImage = await resizeImage(selectedFile);
       
-      reader.onloadend = async () => {
-        // Extract base64 data (remove "data:image/jpeg;base64," part)
-        const base64Data = reader.result.split(',')[1];
-        
-        // Prepare request payload
-        const payload = {
-          image_data: base64Data,
-          model_key: selectedModel,
-          model_bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models'
-        };
+      setUploadProgress(10);
+      
+      const s3Key = await uploadToS3(resizedImage);
+      
+      const payload = {
+        s3_key: s3Key,
+        image_bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models',
+        model_key: selectedModel,
+        model_bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models'
+      };
+      
+      console.log('Sending payload:', payload);
+      console.log('API URL:', process.env.REACT_APP_API_URL);
 
-        // Call Lambda function
+      try {
         const response = await axios.post(
           process.env.REACT_APP_API_URL || '/api',
-          payload,
+          JSON.stringify(payload),
           {
             headers: {
               'Content-Type': 'application/json'
@@ -93,11 +181,14 @@ function App() {
         } else {
           setError('Invalid response format');
         }
+      } catch (err) {
+        console.error('Error calling API:', err);
+        setError(err.response?.data?.error || err.message || 'Error classifying image');
+      } finally {
         setIsLoading(false);
-      };
+      }
     } catch (err) {
-      console.error('Error classifying image:', err);
-      setError(err.response?.data?.error || err.message || 'Error classifying image');
+      setError('Error processing image: ' + err.message);
       setIsLoading(false);
     }
   };
@@ -107,6 +198,7 @@ function App() {
     setPreview(null);
     setPredictions(null);
     setError(null);
+    setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -204,6 +296,32 @@ function App() {
                 ))}
               </Select>
             </FormControl>
+            
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <Box width="100%" mt={1}>
+                <Typography variant="body2" gutterBottom>
+                  Uploading: {uploadProgress}%
+                </Typography>
+                <div 
+                  style={{ 
+                    height: '4px', 
+                    width: '100%', 
+                    backgroundColor: '#e0e0e0',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div 
+                    style={{ 
+                      height: '100%', 
+                      width: `${uploadProgress}%`, 
+                      backgroundColor: '#1976d2',
+                      transition: 'width 0.3s ease'
+                    }} 
+                  />
+                </div>
+              </Box>
+            )}
             
             <Box display="flex" gap={2} mt={2}>
               <Button 
