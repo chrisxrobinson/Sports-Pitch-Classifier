@@ -27,8 +27,12 @@ if [ $count -ge $MAX_RETRIES ]; then
 fi
 
 # Create bucket if it doesn't exist
-echo "Creating sports-pitch-models bucket..."
-$MC mb myminio/sports-pitch-models --ignore-existing
+BUCKET_NAME="sports-pitch-models"
+echo "Creating $BUCKET_NAME bucket..."
+$MC mb "myminio/$BUCKET_NAME" --ignore-existing
+
+# Ensure the model directory exists in the bucket
+$MC mb "myminio/$BUCKET_NAME/model" --ignore-existing 2>/dev/null || true
 
 # Upload models from local directory
 if [ -d "./backend/models" ]; then
@@ -43,8 +47,8 @@ if [ -d "./backend/models" ]; then
       mc alias set myminio http://minio:9000 minioadmin minioadmin && 
       for model in /models/*.pth; do
         if [ -f \"\$model\" ]; then
-          mc cp \"\$model\" myminio/sports-pitch-models/
-          echo \"Uploaded \$(basename \"\$model\")\"
+          echo \"Uploading \$(basename \"\$model\") to myminio/$BUCKET_NAME/model/\"
+          mc cp \"\$model\" \"myminio/$BUCKET_NAME/model/\"
         fi
       done
     "

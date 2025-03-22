@@ -8,6 +8,9 @@ COPY pyproject.toml ${LAMBDA_TASK_ROOT}/
 WORKDIR ${LAMBDA_TASK_ROOT}
 RUN python -m uv pip install --system -e .
 
+# Create model directory structure
+RUN mkdir -p /tmp/models
+
 # Copy function code
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}/
 

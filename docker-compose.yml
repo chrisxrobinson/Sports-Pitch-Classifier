@@ -5,38 +5,66 @@ services:
       dockerfile: Dockerfile
     ports:
       - "9090:8080"
-    environment:
-      - MODEL_BUCKET=sports-pitch-models
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-      - AWS_ENDPOINT_URL=http://minio:9000
+    env_file:
+      - .env
     depends_on:
-      - minio
+      localstack:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL}
+        REACT_APP_AVAILABLE_MODELS: ${REACT_APP_AVAILABLE_MODELS}
+        REACT_APP_MODEL_BUCKET: ${REACT_APP_MODEL_BUCKET}
+        REACT_APP_AWS_ACCESS_KEY_ID: ${REACT_APP_AWS_ACCESS_KEY_ID}
+        REACT_APP_AWS_SECRET_ACCESS_KEY: ${REACT_APP_AWS_SECRET_ACCESS_KEY}
+        REACT_APP_AWS_ENDPOINT_URL: ${REACT_APP_AWS_ENDPOINT_URL}
+        REACT_APP_AWS_REGION: ${REACT_APP_AWS_REGION}
     ports:
-      - "3000:80"
+      - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:9090/2015-03-31/functions/function/invocations
-      - REACT_APP_AVAILABLE_MODELS=pitch_classifier_v0.pth,pitch_classifier_v1.pth
-      - REACT_APP_MODEL_BUCKET=sports-pitch-models
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_AVAILABLE_MODELS=${REACT_APP_AVAILABLE_MODELS}
+      - REACT_APP_MODEL_BUCKET=${REACT_APP_MODEL_BUCKET}
+      - REACT_APP_AWS_ACCESS_KEY_ID=${REACT_APP_AWS_ACCESS_KEY_ID}
+      - REACT_APP_AWS_SECRET_ACCESS_KEY=${REACT_APP_AWS_SECRET_ACCESS_KEY}
+      - REACT_APP_AWS_ENDPOINT_URL=${REACT_APP_AWS_ENDPOINT_URL}
+      - REACT_APP_AWS_REGION=${REACT_APP_AWS_REGION}
+    env_file:
+      - .env
     depends_on:
       - lambda
+      - localstack
 
-  minio:
-    image: minio/minio
+  localstack:
+    image: localstack/localstack:2.3
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "4566:4566"
+      - "4571:4571"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    command: server /data --console-address ":9001"
+      - SERVICES=s3,lambda
+      - DEBUG=1
+      - PERSISTENCE=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - HOSTNAME_EXTERNAL=localstack
+      - EAGER_SERVICE_LOADING=1
+      - START_WEB=0
     volumes:
-      - minio_data:/data
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./backend/models:/tmp/models"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
-  minio_data:
+  localstack_data:

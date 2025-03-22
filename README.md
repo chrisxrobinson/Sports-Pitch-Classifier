@@ -17,6 +17,7 @@ This project consists of three main components:
 - Python 3.12
 - Node.js v14+
 - `uv` Python package manager
+- AWS CLI (for deploying to AWS and local testing)
 
 ### Local Development
 
@@ -31,21 +32,20 @@ make init
 
 #### Running with Docker
 
-To start the complete local development environment with frontend, API, and MinIO (S3 replacement):
+To start the complete local development environment with frontend, API, and LocalStack (AWS services emulator):
 
 ```bash
-# Start all services and set up MinIO
-make local-dev
+# Start all services and set up LocalStack
+make up
 ```
 
 This will:
-1. Start the containers for frontend, Lambda API, and MinIO
-2. Configure MinIO with the required buckets
+1. Start the containers for frontend, Lambda API, and LocalStack
+2. Configure LocalStack with the required buckets and services
 3. Make the services available at:
    - Frontend: http://localhost:3000
    - Lambda API: http://localhost:9090
-   - MinIO Console: http://localhost:9001 (login: minioadmin/minioadmin)
-   - MinIO S3: http://localhost:9000
+   - LocalStack AWS services: http://localhost:4566
 
 #### Individual Docker Commands
 
@@ -62,8 +62,22 @@ make docker-up
 make docker-down
 
 # Clean up Docker resources
-make clean
+make down
 ```
+
+#### Model Management
+
+Upload trained models to S3:
+
+```bash
+# For AWS deployment:
+S3_BUCKET=your-aws-bucket-name make upload-models
+
+# For local testing with LocalStack:
+AWS_ENDPOINT_URL=http://localhost:4566 S3_BUCKET=sports-pitch-models make upload-models
+```
+
+Note: The S3_BUCKET environment variable is required.
 
 ### Development
 
@@ -71,6 +85,65 @@ make clean
 # Run linting
 make lint
 ```
+
+#### Testing the Lambda Function Locally
+
+After starting the local development environment with `make up`, you can test the Lambda function directly:
+
+```bash
+# Test the Lambda function with a sample request
+curl -XPOST "http://localhost:9090/2015-03-31/functions/function/invocations" \
+  -d '{"body": "{\"image_data\":\"base64encodedimagedatahere\",\"model_key\":\"pitch_classifier_v1.pth\"}"}'
+```
+
+For a more complete test with an actual image:
+
+```bash
+# Convert image to base64 and send to Lambda
+IMAGE_FILE="path/to/your/image.jpg"
+BASE64_IMAGE=$(base64 -i "$IMAGE_FILE" | tr -d '\n')
+curl -XPOST "http://localhost:9090/2015-03-31/functions/function/invocations" \
+  -d "{\"body\": \"{\\\"image_data\\\":\\\"$BASE64_IMAGE\\\",\\\"model_key\\\":\\\"pitch_classifier_v1.pth\\\"}\"}"
+```
+
+The Lambda function also supports fetching images from S3:
+
+```bash
+# Upload an image to S3 first
+aws --endpoint-url=http://localhost:4566 s3 cp path/to/image.jpg s3://sports-pitch-models/images/test-image.jpg
+
+# Then reference it in your API call
+curl -XPOST "http://localhost:9090/2015-03-31/functions/function/invocations" \
+  -d '{"body": "{\"s3_key\":\"images/test-image.jpg\",\"image_bucket\":\"sports-pitch-models\",\"model_key\":\"pitch_classifier_v1.pth\"}"}'
+```
+
+You can also interact with LocalStack directly to check S3 buckets or other AWS resources:
+
+```bash
+# List S3 buckets
+aws --endpoint-url=http://localhost:4566 s3 ls
+
+# List contents of the models bucket
+aws --endpoint-url=http://localhost:4566 s3 ls s3://sports-pitch-models/model/
+```
+
+#### S3 Upload Approach
+
+The frontend now uses an S3-based approach for image processing:
+1. Images are resized in the browser
+2. The resized image is uploaded to S3
+3. Only the S3 key is sent to the Lambda function
+4. Lambda retrieves the image from S3 for processing
+
+This approach resolves issues with large image uploads and is more efficient for serverless processing.
+
+#### Troubleshooting
+
+If you encounter issues with large images being rejected by the API, the frontend has been updated to automatically resize images before sending them to the backend. If you're testing with the API directly, consider:
+
+1. Resizing large images before encoding them
+2. Using the S3-based approach for very large images
+3. Checking the logs with `make show-lambda-logs` or `make show-frontend-logs`
 
 ## Model Training and Evaluation
 
