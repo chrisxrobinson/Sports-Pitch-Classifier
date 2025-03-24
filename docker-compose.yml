@@ -15,24 +15,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL}
-        REACT_APP_AVAILABLE_MODELS: ${REACT_APP_AVAILABLE_MODELS}
-        REACT_APP_MODEL_BUCKET: ${REACT_APP_MODEL_BUCKET}
-        REACT_APP_AWS_ACCESS_KEY_ID: ${REACT_APP_AWS_ACCESS_KEY_ID}
-        REACT_APP_AWS_SECRET_ACCESS_KEY: ${REACT_APP_AWS_SECRET_ACCESS_KEY}
-        REACT_APP_AWS_ENDPOINT_URL: ${REACT_APP_AWS_ENDPOINT_URL}
-        REACT_APP_AWS_REGION: ${REACT_APP_AWS_REGION}
     ports:
       - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL}
-      - REACT_APP_AVAILABLE_MODELS=${REACT_APP_AVAILABLE_MODELS}
-      - REACT_APP_MODEL_BUCKET=${REACT_APP_MODEL_BUCKET}
-      - REACT_APP_AWS_ACCESS_KEY_ID=${REACT_APP_AWS_ACCESS_KEY_ID}
-      - REACT_APP_AWS_SECRET_ACCESS_KEY=${REACT_APP_AWS_SECRET_ACCESS_KEY}
-      - REACT_APP_AWS_ENDPOINT_URL=${REACT_APP_AWS_ENDPOINT_URL}
-      - REACT_APP_AWS_REGION=${REACT_APP_AWS_REGION}
     env_file:
       - .env
     depends_on:
@@ -65,6 +49,3 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-
-volumes:
-  localstack_data:

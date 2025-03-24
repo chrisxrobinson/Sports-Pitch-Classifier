@@ -9,18 +9,15 @@ from PIL import Image
 import torch
 from torchvision import transforms, models
 
-# Configure S3 client with endpoint URL
-endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+DEFAULT_BUCKET = os.environ.get('MODEL_BUCKET', 'sports-pitch-models')
+AWS_REGION = os.environ.get('AWS_REGION', 'eu-west-2')
+AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL', None)
+
 s3_client = boto3.client(
     's3',
-    endpoint_url=endpoint_url,
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'test'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'test'),
-    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+    region_name=AWS_REGION,
+    endpoint_url=AWS_ENDPOINT_URL
 )
-
-# Default bucket where models are stored
-DEFAULT_BUCKET = os.environ.get('MODEL_BUCKET', 'sports-pitch-models')
 
 def download_model_from_s3(bucket, key):
     try:
@@ -30,7 +27,6 @@ def download_model_from_s3(bucket, key):
         s3_client.download_file(bucket, key, tmp_path)
         return tmp_path
     except Exception as e:
-        # Try alternative path format if first attempt fails
         try:
             alternative_key = key.replace('model/', '')
             s3_client.download_file(bucket, alternative_key, tmp_path)
@@ -63,10 +59,7 @@ preprocess = transforms.Compose([
 ])
 
 def lambda_handler(event, context):
-    try:
-        print("Received event:", json.dumps(event))  # Add logging to debug
-        
-        # Check if body exists in the event
+    try:        
         if "body" not in event:
             return {
                 "statusCode": 400,
@@ -83,7 +76,6 @@ def lambda_handler(event, context):
         if "image_data" in body_data:
             image_data = base64.b64decode(body_data.get("image_data"))
         elif "s3_key" in body_data:
-            # Alternative approach: get image from S3
             image_bucket = body_data.get("image_bucket", DEFAULT_BUCKET)
             image_data = get_image_from_s3(image_bucket, body_data.get("s3_key"))
         else:
@@ -95,8 +87,6 @@ def lambda_handler(event, context):
         model_name = body_data.get("model_key", "pitch_classifier.pth")
         model_bucket = body_data.get("model_bucket", DEFAULT_BUCKET)
         
-        print(f"Processing request with model: {model_name} from bucket: {model_bucket}")
-
         model_path = download_model_from_s3(model_bucket, f"model/{model_name}")
         
         model, class_to_idx = load_model(model_path)

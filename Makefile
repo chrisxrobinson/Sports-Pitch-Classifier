@@ -53,10 +53,9 @@ upload-models:
 	echo "Upload complete!"
 
 up:
-	docker-compose up -d
+	docker-compose up --build -d
 	@echo "Waiting for services to start..."
-	sleep 10
-	mkdir -p ./backend/models
+	sleep 5
 	$(MAKE) setup-localstack
 	@echo "Local development environment is ready!"
 	@echo "Frontend: http://localhost:3000"
@@ -69,7 +68,7 @@ up:
 	@echo "- View LocalStack logs: make show-localstack-logs"
 	@echo "- View all logs:        make show-all-logs"
 	@echo ""
-	@echo "If you experience issues, try: make docker-down && make local-dev"
+	@echo "If you experience issues, try: make down && make local-dev"
 
 down:
 	docker-compose down -v

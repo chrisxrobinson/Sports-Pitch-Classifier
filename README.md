@@ -56,12 +56,9 @@ make docker-build-frontend
 make docker-build  # Build all Docker images
 
 # Start services
-make docker-up
+make up
 
 # Stop services
-make docker-down
-
-# Clean up Docker resources
 make down
 ```
 
