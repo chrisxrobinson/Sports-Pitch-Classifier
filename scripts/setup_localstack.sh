@@ -75,6 +75,25 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
   fi
 done
 
+# After bucket creation, add CORS configuration
+echo "Configuring CORS for the bucket..."
+cat > /tmp/cors-config.json << EOF
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "PUT", "POST"],
+      "AllowedOrigins": ["*"],
+      "ExposeHeaders": ["ETag"]
+    }
+  ]
+}
+EOF
+
+aws --endpoint-url=http://localhost:4566 s3api put-bucket-cors --bucket $BUCKET_NAME --cors-configuration file:///tmp/cors-config.json || {
+  echo "Warning: Could not set CORS configuration. This might affect file uploads."
+}
+
 # Upload models from local directory
 if [ -d "./backend/models" ]; then
   echo "Uploading models to LocalStack S3..."

@@ -15,7 +15,12 @@ const s3Client = new S3Client({
     accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID || 'test',
     secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || 'test'
   },
-  forcePathStyle: true // Needed for LocalStack
+  forcePathStyle: true,
+  requestHandler: {
+    retryMode: 'standard',
+    maxAttempts: 3
+  },
+  customUserAgent: 'Sports-Pitch-Classifier',
 });
 
 function App() {
@@ -83,32 +88,37 @@ function App() {
       const filename = `${timestamp}-${randomString}.jpg`;
       const s3Key = `images/${filename}`;
       
+      const fileBuffer = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+        reader.readAsArrayBuffer(file);
+      });
+      
       const command = new PutObjectCommand({
         Bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models',
         Key: s3Key,
-        Body: file,
-        ContentType: 'image/jpeg'
+        Body: fileBuffer,
+        ContentType: 'image/jpeg',
+        ACL: 'public-read'
       });
-            
-      await s3Client.send(command);
-
-      setUploadProgress(100);
       
-      return s3Key;
+      try {
+        await s3Client.send(command);
+        setUploadProgress(100);
+        return s3Key;
+      } catch (sendError) {
+        if (sendError.name === 'TypeError' && sendError.message === 'Failed to fetch') {
+          throw new Error('Failed to connect to S3. Please check if LocalStack is running and accessible.');
+        }
+        throw sendError;
+      }
     } catch (error) {
       throw new Error(`Failed to upload image to S3: ${error.message}`);
     }
   };
 
-  useEffect(() => {
-    console.log('Environment variables:', {
-      REACT_APP_API_URL: process.env.REACT_APP_API_URL,
-      REACT_APP_AVAILABLE_MODELS: process.env.REACT_APP_AVAILABLE_MODELS,
-      REACT_APP_MODEL_BUCKET: process.env.REACT_APP_MODEL_BUCKET,
-      REACT_APP_AWS_REGION: process.env.REACT_APP_AWS_REGION,
-      REACT_APP_AWS_ENDPOINT_URL: process.env.REACT_APP_AWS_ENDPOINT_URL
-    });
-    
+  useEffect(() => {    
     const modelsString = process.env.REACT_APP_AVAILABLE_MODELS || 'pitch_classifier_v1.pth';
     const models = modelsString.split(',');
     setAvailableModels(models);
@@ -161,14 +171,13 @@ function App() {
         model_key: selectedModel,
         model_bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models'
       };
-      
-      console.log('Sending payload:', payload);
-      console.log('API URL:', process.env.REACT_APP_API_URL);
+
+      const requestPayload = { body: JSON.stringify(payload) };
 
       try {
         const response = await axios.post(
           process.env.REACT_APP_API_URL || '/api',
-          JSON.stringify(payload),
+          requestPayload,
           {
             headers: {
               'Content-Type': 'application/json'
@@ -182,7 +191,6 @@ function App() {
           setError('Invalid response format');
         }
       } catch (err) {
-        console.error('Error calling API:', err);
         setError(err.response?.data?.error || err.message || 'Error classifying image');
       } finally {
         setIsLoading(false);

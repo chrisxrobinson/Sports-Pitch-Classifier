@@ -118,7 +118,7 @@ def main():
     parser = argparse.ArgumentParser(description="Test Sports Pitch Classifier on a single image")
     parser.add_argument("--image_path", type=str, required=True, 
                         help="Path to the image to test")
-    parser.add_argument("--model_path", type=str, default="models/pitch_classifier.pth",
+    parser.add_argument("--model_path", type=str, default="models/pitch_classifier_v1.pth",
                         help="Path to the saved model")
     parser.add_argument("--top_k", type=int, default=3,
                         help="Display top K predictions")
