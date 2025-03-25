@@ -8,30 +8,39 @@ This API provides image classification for sports pitches and other aerial image
 ```bash
 # Build and run the API with Docker
 docker build -t sports-pitch-api .
-docker run -p 9000:8080 sports-pitch-api
+docker run -p 8000:8000 sports-pitch-api
 ```
 
-### Running in AWS Lambda Local Environment
+### Running Locally without Docker
 ```bash
-# Test Lambda function locally using the AWS Lambda Runtime Interface Emulator
-docker run -p 9000:8080 sports-pitch-api
+# Install dependencies
+pip install -e .
 
-# Then call the function using curl
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{
-  "body": "{\"image_data\": \"base64encodedimage\", \"model_key\": \"pitch_classifier_v1.pth\"}"
-}'
+# Run the FastAPI app
+uvicorn app:app --reload
 ```
 
 ## API Interface
+
+### Endpoints
+
+- `GET /` - Welcome message and API status check
+- `POST /predict` - Predict sports pitch classes from image
 
 ### Request Format
 ```json
 {
   "image_data": "base64encodedimage",
+  "s3_key": "path/to/image.jpg",
+  "image_bucket": "sports-pitch-models",
   "model_key": "pitch_classifier_v1.pth",
   "model_bucket": "sports-pitch-models"
 }
 ```
+
+Notes:
+- Provide either `image_data` (base64-encoded) or `s3_key` (referencing an S3 object)
+- `image_bucket` and `model_bucket` are optional and will use the default bucket if not specified
 
 ### Response Format
 ```json
@@ -56,6 +65,8 @@ curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d
 }
 ```
 
-## Deployment
+## Interactive Documentation
 
-The API is designed to be deployed as an AWS Lambda function. See the deployment scripts in the `scripts` directory for automated deployment options.
+When the API is running, you can access the interactive API documentation at:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc

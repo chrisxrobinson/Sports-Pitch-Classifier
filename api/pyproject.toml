@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.37.17",
+    "fastapi>=0.115.12",
     "pillow>=11.1.0",
+    "pydantic>=2.10.6",
     "torch>=2.6.0",
     "torchvision>=0.21.0",
+    "uvicorn>=0.34.0",
 ]

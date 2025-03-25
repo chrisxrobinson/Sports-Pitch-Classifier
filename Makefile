@@ -59,11 +59,11 @@ up:
 	$(MAKE) setup-localstack
 	@echo "Local development environment is ready!"
 	@echo "Frontend: http://localhost:3000"
-	@echo "Lambda API: http://localhost:9090"
+	@echo "API: http://localhost:8000/docs"
 	@echo "LocalStack (AWS Services): http://localhost:4566"
 	@echo ""
 	@echo "TROUBLESHOOTING COMMANDS:"
-	@echo "- View Lambda logs:     make show-lambda-logs"
+	@echo "- View Api logs:     make show-api-logs"
 	@echo "- View Frontend logs:   make show-frontend-logs"
 	@echo "- View LocalStack logs: make show-localstack-logs"
 	@echo "- View all logs:        make show-all-logs"
@@ -74,8 +74,8 @@ down:
 	docker-compose down -v
 	docker system prune -f
 
-show-lambda-logs:
-	docker-compose logs lambda
+show-api-logs:
+	docker-compose logs api
 
 show-frontend-logs:
 	docker-compose logs frontend

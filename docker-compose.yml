@@ -1,10 +1,10 @@
 services:
-  lambda:
+  api:
     build:
       context: ./api
       dockerfile: Dockerfile
     ports:
-      - "9090:8080"
+      - "8000:8000"
     env_file:
       - .env
     depends_on:
@@ -20,7 +20,7 @@ services:
     env_file:
       - .env
     depends_on:
-      - lambda
+      - api
       - localstack
 
   localstack:
@@ -29,7 +29,7 @@ services:
       - "4566:4566"
       - "4571:4571"
     environment:
-      - SERVICES=s3,lambda
+      - SERVICES=s3
       - DEBUG=1
       - PERSISTENCE=1
       - AWS_DEFAULT_REGION=us-east-1

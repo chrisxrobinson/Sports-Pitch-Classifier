@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Typography, Button, Box, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
+import { Container, Typography, Button, Box, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress, 
+         Accordion, AccordionSummary, AccordionDetails, Chip, Divider, Alert, Card, CardContent } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon, Info as InfoIcon } from '@mui/icons-material';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import axios from 'axios';
@@ -32,6 +34,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [classInfo, setClassInfo] = useState({
+    sportsClasses: [],
+    allClasses: {}
+  });
+  const [showAllClasses, setShowAllClasses] = useState(false);
   
   const fileInputRef = useRef(null);
 
@@ -61,21 +68,18 @@ function App() {
             }
           }
           
-          // Create canvas and resize image
           const canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
           
           const ctx = canvas.getContext('2d');
-          // Use white background for PNG transparency
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Always convert to JPEG for API transmission (smaller file size)
           canvas.toBlob((blob) => {
             resolve(blob);
-          }, 'image/jpeg', 0.4); // Lower quality for even smaller file size
+          }, 'image/jpeg', 0.8);
         };
       };
     });
@@ -123,6 +127,25 @@ function App() {
     const models = modelsString.split(',');
     setAvailableModels(models);
     setSelectedModel(models[0]);
+    
+    const fetchClassInfo = async () => {
+      try {
+        const response = await axios.get(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/classes`
+        );
+        
+        if (response.data) {
+          setClassInfo({
+            sportsClasses: response.data.sports_classes || [],
+            allClasses: response.data.all_classes || {}
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch class information:", err);
+      }
+    };
+    
+    fetchClassInfo();
   }, []);
 
   const handleFileChange = (event) => {
@@ -172,12 +195,10 @@ function App() {
         model_bucket: process.env.REACT_APP_MODEL_BUCKET || 'sports-pitch-models'
       };
 
-      const requestPayload = { body: JSON.stringify(payload) };
-
       try {
         const response = await axios.post(
-          process.env.REACT_APP_API_URL || '/api',
-          requestPayload,
+          `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/classify`,
+          payload,
           {
             headers: {
               'Content-Type': 'application/json'
@@ -191,7 +212,7 @@ function App() {
           setError('Invalid response format');
         }
       } catch (err) {
-        setError(err.response?.data?.error || err.message || 'Error classifying image');
+        setError(err.response?.data?.detail || err.message || 'Error classifying image');
       } finally {
         setIsLoading(false);
       }
@@ -212,9 +233,21 @@ function App() {
     }
   };
 
-  // Prepare chart data if predictions are available
+  const formatClassName = (className) => {
+    if (!className) return "";
+    
+    const withSpaces = typeof className === 'string' 
+      ? className.replace(/_/g, ' ') 
+      : String(className);
+    
+    return withSpaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const chartData = predictions ? {
-    labels: predictions.map(p => p.class),
+    labels: predictions.map(p => formatClassName(p.class)),
     datasets: [
       {
         label: 'Confidence (%)',
@@ -257,7 +290,118 @@ function App() {
         Sports Pitch Classifier
       </Typography>
       
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body1">
+          This application classifies images of various scenes, with a focus on sports pitches and fields.
+          Upload an image to identify what type of location it shows.
+        </Typography>
+      </Alert>
+      
       <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+        <Accordion defaultExpanded sx={{ mb: 3 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box display="flex" alignItems="center">
+              <InfoIcon sx={{ mr: 1, color: 'primary.main' }} />
+              <Typography variant="h6">What This Model Can Classify</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="subtitle1" gutterBottom>
+              Sports Categories:
+            </Typography>
+            <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
+              {classInfo.sportsClasses.map(sportClass => (
+                <Chip 
+                  key={sportClass}
+                  label={formatClassName(sportClass)}
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
+            </Box>
+            
+            <Divider sx={{ my: 2 }} />
+            
+            <Typography variant="subtitle1" gutterBottom>
+              All Categories (45 total):
+            </Typography>
+            <Box display="flex" flexWrap="wrap" gap={1}>
+              {Object.values(classInfo.allClasses).slice(0, 10).map((className, idx) => (
+                <Chip 
+                  key={idx}
+                  label={formatClassName(className)}
+                  size="small"
+                  variant="outlined"
+                />
+              ))}
+              {Object.values(classInfo.allClasses).length > 10 && (
+                <Chip 
+                  label={`+ ${Object.values(classInfo.allClasses).length - 10} more...`}
+                  size="small"
+                  color="primary"
+                  onClick={() => setShowAllClasses(true)}
+                  sx={{ cursor: 'pointer' }}
+                />
+              )}
+            </Box>
+            
+            {showAllClasses && (
+              <Box 
+                sx={{ 
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  zIndex: 9999,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
+                onClick={() => setShowAllClasses(false)}
+              >
+                <Box 
+                  sx={{ 
+                    backgroundColor: 'white',
+                    borderRadius: 1,
+                    p: 3,
+                    maxWidth: '80%',
+                    maxHeight: '80vh',
+                    overflow: 'auto',
+                    position: 'relative'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Typography variant="h6" gutterBottom>
+                    All Available Categories
+                  </Typography>
+                  
+                  <Box display="flex" flexWrap="wrap" gap={1} mt={2}>
+                    {Object.values(classInfo.allClasses).map((className, idx) => (
+                      <Chip 
+                        key={idx}
+                        label={formatClassName(className)}
+                        size="medium"
+                        variant={classInfo.sportsClasses.includes(className) ? "filled" : "outlined"}
+                        color={classInfo.sportsClasses.includes(className) ? "primary" : "default"}
+                      />
+                    ))}
+                  </Box>
+                  
+                  <Button 
+                    sx={{ mt: 3 }}
+                    variant="outlined" 
+                    onClick={() => setShowAllClasses(false)}
+                  >
+                    Close
+                  </Button>
+                </Box>
+              </Box>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
         <Box mb={3}>
           <Typography variant="h6" gutterBottom>
             Upload an image to classify
@@ -367,21 +511,36 @@ function App() {
             </Typography>
             
             <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={4}>
-              {/* Image with top prediction */}
               <Box flex="1" textAlign="center">
-                <Typography variant="subtitle1" gutterBottom>
-                  Predicted: {predictions[0].class}
-                </Typography>
+                <Card raised sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h5" gutterBottom>
+                      {formatClassName(predictions[0].class)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {predictions[0].is_sport ? 
+                        <Chip size="small" color="success" label="Sports Field" /> :
+                        <Chip 
+                          size="small" 
+                          color="default" 
+                          label={formatClassName(predictions[0].class)}
+                        />
+                      }
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Confidence: {(predictions[0].confidence * 100).toFixed(2)}%
+                    </Typography>
+                  </CardContent>
+                </Card>
                 {preview && (
                   <img 
                     src={preview} 
-                    alt={predictions[0].class} 
+                    alt={String(predictions[0].class)} 
                     style={{ maxWidth: '100%', maxHeight: '250px' }} 
                   />
                 )}
               </Box>
               
-              {/* Bar chart with probabilities */}
               <Box flex="1" height="250px">
                 {chartData && (
                   <Bar data={chartData} options={chartOptions} />
