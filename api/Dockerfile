@@ -1,18 +1,16 @@
-FROM public.ecr.aws/lambda/python:3.12
+FROM python:3.12-slim
 
-# Install uv
+WORKDIR /app
+
 RUN pip install uv
 
-# Copy requirements and install dependencies
-COPY pyproject.toml ${LAMBDA_TASK_ROOT}/
-WORKDIR ${LAMBDA_TASK_ROOT}
-RUN python -m uv pip install --system -e .
+COPY pyproject.toml .
+RUN python -m uv pip install -e .
 
-# Create model directory structure
 RUN mkdir -p /tmp/models
 
-# Copy function code
-COPY lambda_function.py ${LAMBDA_TASK_ROOT}/
+COPY app.py .
 
-# Set the handler
-CMD [ "lambda_function.lambda_handler" ]
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

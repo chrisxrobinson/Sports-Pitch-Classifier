@@ -41,14 +41,14 @@ The frontend application uploads images directly to S3 using AWS SDK v3:
 1. Images are selected by the user
 2. Images are resized in the browser to reduce size
 3. Resized images are uploaded directly to S3 using the AWS SDK
-4. The S3 key is sent to the Lambda function for processing
-5. The Lambda function loads the image from S3 and runs inference
+4. The S3 key is sent to the API for processing
+5. The API loads the image from S3 and runs inference
 
 ## Environment Variables
 
 The application can be configured using the following environment variables:
 
-- `REACT_APP_API_URL`: URL of the Lambda function endpoint
+- `REACT_APP_API_URL`: URL of the API function endpoint
 - `REACT_APP_AVAILABLE_MODELS`: Comma-separated list of available model filenames
 - `REACT_APP_MODEL_BUCKET`: S3 bucket name where models are stored
 - `REACT_APP_AWS_ACCESS_KEY_ID`: AWS access key for S3 operations
